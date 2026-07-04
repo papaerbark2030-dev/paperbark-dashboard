@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paperbark Farm — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg: #f7f5f0; --card: #ffffff; --ink: #2d2a24; --muted: #8a8478;
+    --accent: #3d6b4f; --accent-soft: #e3ede6; --line: #e8e4db;
+    --red: #b0483b; --red-soft: #f6e5e2; --amber: #a2701f; --amber-soft: #f7edda;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 18px 22px 10px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+  header .date { color: var(--muted); font-size: 14px; }
+  header .spacer { flex: 1; }
+  button { font: inherit; cursor: pointer; }
+  .ghost { background: none; border: 1px solid var(--line); border-radius: 8px;
+           padding: 6px 12px; color: var(--muted); font-size: 13px; }
+  .ghost:hover { border-color: var(--accent); color: var(--accent); }
+  nav { display: flex; gap: 6px; padding: 0 22px 14px; flex-wrap: wrap; }
+  nav button { border: none; background: none; padding: 8px 14px; border-radius: 999px;
+               font-size: 14px; color: var(--muted); }
+  nav button.on { background: var(--accent); color: #fff; }
+  main { padding: 0 22px 40px; max-width: 1180px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
+  .dog { padding: 10px 0; border-top: 1px solid var(--line); }
+  .dog:first-of-type { border-top: none; }
+  .dog .name { font-weight: 600; font-size: 14.5px; }
+  .dog .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .dog .meta a { color: var(--accent); text-decoration: none; }
+  .chips { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+          background: var(--red-soft); color: var(--red); }
+  .chip.ok { background: var(--accent-soft); color: var(--accent); }
+  .chip.warn { background: var(--amber-soft); color: var(--amber); }
+  .empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px;
+       padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .status { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .s-InStay { background: var(--accent-soft); color: var(--accent); }
+  .s-Booked { background: #e7e9f4; color: #4a5490; }
+  .s-PaymentPending { background: var(--amber-soft); color: var(--amber); }
+  .s-Paid { background: var(--accent-soft); color: var(--accent); }
+  .s-Enquiry { background: #efe9f5; color: #6d4f8c; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .cal .dow { text-align: center; font-size: 11px; color: var(--muted); }
+  .day { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+         min-height: 58px; padding: 6px 8px; font-size: 12px; }
+  .day.wkend { background: #f2efe7; }
+  .day.today { border-color: var(--accent); border-width: 2px; }
+  .day .d { color: var(--muted); }
+  .day .n { font-size: 18px; font-weight: 650; margin-top: 2px; }
+  .day.busy .n { color: var(--red); }
+  .day .n.zero { color: var(--line); font-weight: 400; }
+  .mv-head { display: flex; align-items: center; gap: 8px; }
+  .mv-head h2 { font-size: 17px; }
+  .mv-dow { display: grid; grid-template-columns: repeat(7, 1fr); margin-top: 10px; }
+  .mv-dow div { text-align: right; font-size: 11px; color: var(--muted); padding: 0 6px 4px; }
+  .mv-week { position: relative; border-top: 1px solid var(--line); }
+  .mv-cells { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, 1fr); }
+  .mv-cells div { border-right: 1px solid var(--line); }
+  .mv-cells div:last-child { border-right: none; }
+  .mv-cells .wkend { background: #f2efe7; }
+  .mv-body { position: relative; display: grid; grid-template-columns: repeat(7, 1fr);
+             grid-auto-rows: 20px; gap: 2px 0; padding-bottom: 8px; min-height: 84px; }
+  .mv-day { text-align: right; font-size: 12px; color: var(--ink); padding: 4px 6px 2px; }
+  .mv-day.dim { color: var(--line); }
+  .mv-day .td { background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 6px; }
+  .mv-bar { font-size: 11px; line-height: 18px; color: #fff; padding: 0 7px; margin: 0 1px;
+            border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            cursor: pointer; }
+  .mv-bar:hover { filter: brightness(1.15); }
+  #modalWrap { position: fixed; inset: 0; background: rgba(45,42,36,.45); display: flex;
+               align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 50; }
+  #modal { background: var(--card); border-radius: 14px; padding: 20px; width: 100%;
+           max-width: 480px; max-height: 80vh; overflow-y: auto; position: relative;
+           box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+  #modal .x { position: absolute; top: 10px; right: 12px; border: none; background: none;
+              font-size: 20px; color: var(--muted); }
+  #modal h3 { margin: 0 24px 2px 0; font-size: 17px; }
+  #modal .row { display: flex; gap: 8px; margin-top: 10px; font-size: 13.5px; }
+  #modal .row .k { color: var(--muted); min-width: 92px; flex-shrink: 0; }
+  #modal .dogblk { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 10px; }
+  .mv-bar.contL { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; }
+  .mv-bar.contR { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; }
+  #login { max-width: 340px; margin: 12vh auto; }
+  #login input { width: 100%; padding: 10px 12px; margin-bottom: 10px; font: inherit;
+                 border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  #login button.go { width: 100%; padding: 10px; border: none; border-radius: 8px;
+                     background: var(--accent); color: #fff; font-weight: 600; }
+  #login .err { color: var(--red); font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .loading { color: var(--muted); padding: 30px 0; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <div class="card">
+    <h2>Paperbark Farm</h2>
+    <div class="sub">Staff dashboard — sign in</div>
+    <input id="email" type="email" placeholder="Email" autocomplete="username">
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="go" onclick="signIn()">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>🐾 Paperbark Farm</h1>
+    <span class="date" id="todayLabel"></span>
+    <span class="spacer"></span>
+    <button class="ghost" onclick="loadAll()">Refresh</button>
+    <button class="ghost" onclick="signOut()">Sign out</button>
+  </header>
+  <nav id="tabs">
+    <button data-tab="today" class="on">Today</button>
+    <button data-tab="pipeline">Pipeline</button>
+    <button data-tab="calendar">Numbers</button>
+    <button data-tab="month">Calendar</button>
+    <button data-tab="money">Money</button>
+    <button data-tab="compliance">Compliance</button>
+  </nav>
+  <main>
+    <section id="tab-today" class="cols"></section>
+    <section id="tab-pipeline" hidden><div class="card" id="pipelineCard"></div></section>
+    <section id="tab-calendar" hidden><div class="card"><h2>Dogs on site — next 5 weeks</h2><div class="sub">count = dogs sleeping on the farm that night</div><div class="cal" id="calGrid"></div></div></section>
+    <section id="tab-month" hidden>
+      <div class="card">
+        <div class="mv-head">
+          <h2 id="mvTitle"></h2>
+          <span class="spacer"></span>
+          <button class="ghost" onclick="mvShift(-1)">‹</button>
+          <button class="ghost" onclick="mvShift(0)">Today</button>
+          <button class="ghost" onclick="mvShift(1)">›</button>
+        </div>
+        <div class="sub">every dog its own colour · bars run through going-home day</div>
+        <div id="monthGrid"></div>
+      </div>
+    </section>
+    <section id="tab-money" hidden><div class="card" id="moneyCard"></div></section>
+    <section id="tab-compliance" hidden><div class="card" id="compCard"></div></section>
+  </main>
+</div>
+
+<div id="modalWrap" hidden>
+  <div id="modal">
+    <button class="x" onclick="closeBooking()">×</button>
+    <div id="modalBody"><div class="loading">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ekcbynduceipgcqvtpyf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_OY_XL1pBcCg9mGbFX0qJxg_KwIWBkPj';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const ACTIVE = ['Enquiry','Trial Weekend','Availability Pending','Availability Confirmed',
+                'Deposit Requested','Payment Pending','Paid','Booked','In Stay','Follow-up'];
+
+// Sydney "today", regardless of where this page runs
+function sydToday(offset = 0) {
+  const d = new Date(Date.now() + offset * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(d);
+}
+const esc = s => (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtD = s => new Date(s + 'T12:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+
+let bookings = [];   // active bookings, next ~6 weeks, with dogs + owners embedded
+
+async function loadAll() {
+  const today = sydToday();
+  document.getElementById('todayLabel').textContent =
+    new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Australia/Sydney' });
+  const { data, error } = await db.from('bookings')
+    .select(`id,title,status,check_in_date,check_out_date,transport_to,pickup_timing,return_timing,
+             notes,calendar_colour,balance_24h_prior,important,
+             booking_dogs ( dogs ( id,name,size,breed,suburb,red_flags,meals,
+                                   owners ( name,phone,email ) ) )`)
+    .in('status', ACTIVE)
+    .gte('check_out_date', today)
+    .lte('check_in_date', sydToday(42))
+    .order('check_in_date');
+  if (error) { alert('Load failed: ' + error.message); return; }
+  bookings = data;
+  Object.keys(mvCache).forEach(k => delete mvCache[k]);   // refresh clears month cache
+  renderToday(); renderPipeline(); renderCalendar(); renderMoney(); renderCompliance(); renderMonth();
+}
+
+const dogsOf = b => b.booking_dogs.map(x => x.dogs).filter(Boolean);
+
+function dogLine(b, d, extra = '') {
+  const o = d.owners || {};
+  const flags = (d.red_flags || []).map(f => `<span class="chip">${esc(f)}</span>`).join('');
+  return `<div class="dog">
+    <div class="name">${d.size ? '(' + d.size + ') ' : ''}${esc(d.name)}
+      <span style="font-weight:400;color:var(--muted)">· ${esc(d.breed || '')}</span></div>
+    <div class="meta">${esc(o.name || 'Unknown owner')}
+      ${o.phone ? ` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : ''}
+      ${d.suburb ? ' · ' + esc(d.suburb) : ''}</div>
+    ${extra}
+    ${flags ? `<div class="chips">${flags}</div>` : ''}
+  </div>`;
+}
+
+function renderToday() {
+  const today = sydToday();
+  const arr = bookings.filter(b => b.check_in_date === today);
+  const dep = bookings.filter(b => b.check_out_date === today);
+  const onsite = bookings.filter(b => b.check_in_date <= today && b.check_out_date > today);
+  const block = (title, sub, list, f) => `<div class="card"><h2>${title}</h2><div class="sub">${sub}</div>
+    ${list.length ? list.map(f).join('') : '<div class="empty">Nobody — quiet day 🎉</div>'}</div>`;
+  document.getElementById('tab-today').innerHTML =
+    block(`Arriving today (${arr.reduce((n,b)=>n+dogsOf(b).length,0)})`, 'incoming dogs & pickup plans', arr,
+      b => dogsOf(b).map(d => dogLine(b, d,
+        `<div class="meta">${esc(b.transport_to ? 'Transport: ' + b.transport_to : 'Owner drop-off')}${b.pickup_timing ? ' · ' + esc(b.pickup_timing) : ''}${d.meals ? `<br>Meals: ${esc(d.meals)}` : ''}</div>`)).join('')) +
+    block(`Going home today (${dep.reduce((n,b)=>n+dogsOf(b).length,0)})`, 'departures & balances', dep,
+      b => dogsOf(b).map(d => dogLine(b, d,
+        `<div class="meta">${esc(b.transport_to ? 'Transport: ' + b.transport_to : 'Owner pickup')}${b.return_timing ? ' · ' + esc(b.return_timing) : ''}${b.balance_24h_prior > 0 ? `<br><span class="chip warn">Balance due $${b.balance_24h_prior}</span>` : ''}</div>`)).join('')) +
+    block(`On the farm tonight (${onsite.reduce((n,b)=>n+dogsOf(b).length,0)})`, 'staying overnight', onsite,
+      b => dogsOf(b).map(d => dogLine(b, d,
+        `<div class="meta">until ${fmtD(b.check_out_date)}</div>`)).join(''));
+}
+
+function renderPipeline() {
+  const rows = bookings.map(b => {
+    const ds = dogsOf(b);
+    return `<tr>
+      <td><span class="status s-${b.status.replace(/\s/g,'')}">${b.status}</span></td>
+      <td>${ds.map(d => esc(d.name)).join(', ') || esc(b.title)}</td>
+      <td>${fmtD(b.check_in_date)} → ${fmtD(b.check_out_date)}</td>
+      <td>${esc(ds[0]?.owners?.name || '')}</td>
+      <td>${esc(b.transport_to || '—')}</td>
+      <td>${(b.important || []).map(i => `<span class="chip warn">${esc(i)}</span>`).join(' ')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pipelineCard').innerHTML =
+    `<h2>Upcoming & current stays (${bookings.length})</h2><div class="sub">next 6 weeks, by check-in</div>
+     <table><tr><th>Status</th><th>Dogs</th><th>Dates</th><th>Owner</th><th>Transport</th><th></th></tr>${rows}</table>`;
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  const start = new Date(sydToday() + 'T12:00');
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // back to Monday
+  let html = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    const n = bookings.filter(b => b.check_in_date <= iso && b.check_out_date > iso)
+                      .reduce((s, b) => s + dogsOf(b).length, 0);
+    const wkend = [0, 6].includes(d.getDay());
+    html += `<div class="day${wkend ? ' wkend' : ''}${iso === sydToday() ? ' today' : ''}${n >= 8 ? ' busy' : ''}">
+      <div class="d">${d.getDate()}${d.getDate() === 1 ? ' ' + d.toLocaleDateString('en-AU', { month: 'short' }) : ''}</div>
+      <div class="n${n ? '' : ' zero'}">${n}</div></div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function renderMoney() {
+  const owed = bookings.filter(b => b.balance_24h_prior > 0 ||
+    ['Payment Pending'].includes(b.status) || b.calendar_colour === 'Full payment not received');
+  const rows = owed.map(b => `<tr>
+      <td>${dogsOf(b).map(d => esc(d.name)).join(', ') || esc(b.title)}</td>
+      <td>${fmtD(b.check_in_date)} → ${fmtD(b.check_out_date)}</td>
+      <td>${b.balance_24h_prior > 0 ? '$' + b.balance_24h_prior : '—'}</td>
+      <td>${esc(b.calendar_colour || b.status)}</td>
+      <td>${esc(dogsOf(b)[0]?.owners?.phone || '')}</td>
+    </tr>`).join('');
+  document.getElementById('moneyCard').innerHTML =
+    `<h2>Payment attention (${owed.length})</h2><div class="sub">upcoming stays not fully paid, from Podio payment markers</div>
+     ${owed.length ? `<table><tr><th>Dogs</th><th>Stay</th><th>Balance 24h prior</th><th>Payment marker</th><th>Phone</th></tr>${rows}</table>` : '<div class="empty">Everything paid ✓</div>'}`;
+}
+
+async function renderCompliance() {
+  const { data, error } = await db.from('dogs_with_compliance_gaps').select('*');
+  const el = document.getElementById('compCard');
+  if (error) { el.innerHTML = `<h2>Compliance</h2><div class="empty">${esc(error.message)}</div>`; return; }
+  const rows = (data || []).map(r => `<tr>
+      <td>${esc(r.dog_name)}</td><td>${fmtD(r.check_in_date)}</td>
+      <td>${r.missing_vaccination ? '<span class="chip">No vaccination record</span>' : '<span class="chip ok">✓</span>'}</td>
+      <td>${r.missing_waiver ? '<span class="chip">No waiver</span>' : '<span class="chip ok">✓</span>'}</td>
+      <td>${esc(r.owner_name)} ${r.phone ? '· ' + esc(r.phone) : ''}</td>
+    </tr>`).join('');
+  el.innerHTML = `<h2>Compliance gaps — arrivals in the next 14 days</h2>
+    <div class="sub">will empty out as the portal collects waivers & vaccination records</div>
+    ${data?.length ? `<table><tr><th>Dog</th><th>Arriving</th><th>Vaccination</th><th>Waiver</th><th>Owner</th></tr>${rows}</table>`
+                   : '<div class="empty">No gaps ✓</div>'}`;
+}
+
+// ---- month calendar (iCal-style, per-dog colours) ----
+let mvAnchor = sydToday().slice(0, 7);            // 'YYYY-MM' being displayed
+const mvCache = {};                                // month -> bookings
+
+function dogColor(id) {                            // stable, well-spread colour per dog
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const hue = Math.round((h * 137.508) % 360);     // golden angle: neighbours never similar
+  return `hsl(${hue} 48% 37%)`;
+}
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00'); d.setDate(d.getDate() + n);
+                              return d.toISOString().slice(0, 10); };
+
+function mvShift(n) {
+  if (n === 0) mvAnchor = sydToday().slice(0, 7);
+  else { const d = new Date(mvAnchor + '-15T12:00'); d.setMonth(d.getMonth() + n);
+         mvAnchor = d.toISOString().slice(0, 7); }
+  renderMonth();
+}
+
+async function fetchMonth(month) {
+  if (mvCache[month]) return mvCache[month];
+  const first = month + '-01', last = addDays(month + '-28', 6); // covers month end
+  const { data, error } = await db.from('bookings')
+    .select(`id,check_in_date,check_out_date,status,
+             booking_dogs ( dogs ( id,name,size,breed,suburb ) )`)
+    .neq('status', 'Cancelled')
+    .lte('check_in_date', last).gte('check_out_date', first)
+    .order('check_in_date');
+  if (error) { console.error(error); return []; }
+  return (mvCache[month] = data);
+}
+
+async function renderMonth() {
+  const month = mvAnchor;
+  document.getElementById('mvTitle').textContent =
+    new Date(month + '-01T12:00').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+  const grid = document.getElementById('monthGrid');
+  grid.innerHTML = '<div class="loading">Loading…</div>';
+  const data = await fetchMonth(month);
+  if (mvAnchor !== month) return;                  // user already navigated on
+
+  // one bar per dog per booking; display range includes going-home day
+  const bars = [];
+  for (const b of data)
+    for (const x of b.booking_dogs) {
+      const d = x.dogs; if (!d) continue;
+      bars.push({ s: b.check_in_date, e: b.check_out_date, color: dogColor(d.id), bookingId: b.id,
+        label: `${d.size ? '(' + d.size + ') ' : ''}${d.name}${d.breed ? ' (' + d.breed + ')' : ''}${d.suburb ? ' ' + d.suburb : ''}` });
+    }
+
+  const firstOfMonth = month + '-01';
+  const dow = (new Date(firstOfMonth + 'T12:00').getDay() + 6) % 7; // Mon=0
+  let cur = addDays(firstOfMonth, -dow);
+  const today = sydToday();
+  let html = '<div class="mv-dow">' + ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+             .map(d => `<div>${d}</div>`).join('') + '</div>';
+
+  while (cur.slice(0, 7) <= month) {               // week rows until month is covered
+    const wkStart = cur, wkEnd = addDays(cur, 6);
+    // segments overlapping this week, packed into lanes
+    const segs = bars.filter(b => b.s <= wkEnd && b.e >= wkStart)
+      .map(b => ({ ...b,
+        c0: Math.max(0, Math.round((new Date(b.s + 'T12:00') - new Date(wkStart + 'T12:00')) / 86400000)),
+        c1: Math.min(6, Math.round((new Date(b.e + 'T12:00') - new Date(wkStart + 'T12:00')) / 86400000)),
+        contL: b.s < wkStart, contR: b.e > wkEnd }))
+      .sort((a, b) => a.c0 - b.c0 || b.c1 - a.c1);
+    const lanes = [];
+    for (const s of segs) {
+      let l = lanes.findIndex(end => end < s.c0);
+      if (l === -1) { l = lanes.length; lanes.push(-1); }
+      lanes[l] = s.c1; s.lane = l;
+    }
+    let cells = '', days = '';
+    for (let i = 0; i < 7; i++) {
+      const iso = addDays(wkStart, i);
+      cells += `<div class="${i >= 5 ? 'wkend' : ''}"></div>`;
+      const n = +iso.slice(8, 10);
+      days += `<div class="mv-day${iso.slice(0, 7) !== month ? ' dim' : ''}" style="grid-column:${i + 1};grid-row:1">
+                 ${iso === today ? `<span class="td">${n}</span>` : n}</div>`;
+    }
+    const barHtml = segs.map(s =>
+      `<div class="mv-bar${s.contL ? ' contL' : ''}${s.contR ? ' contR' : ''}" data-b="${s.bookingId}"
+            style="grid-column:${s.c0 + 1}/${s.c1 + 2};grid-row:${s.lane + 2};background:${s.color}"
+            title="${esc(s.label)} · ${fmtD(s.s)} → ${fmtD(s.e)}">${esc(s.label)}</div>`).join('');
+    html += `<div class="mv-week"><div class="mv-cells">${cells}</div>
+             <div class="mv-body">${days}${barHtml}</div></div>`;
+    cur = addDays(cur, 7);
+  }
+  grid.innerHTML = html;
+}
+
+// ---- booking details modal ----
+async function openBooking(id) {
+  const wrap = document.getElementById('modalWrap'), body = document.getElementById('modalBody');
+  wrap.hidden = false;
+  body.innerHTML = '<div class="loading">Loading…</div>';
+  const { data: b, error } = await db.from('bookings')
+    .select(`*, booking_dogs ( dogs ( *, owners ( name,phone,email,address,notes ) ) )`)
+    .eq('id', id).single();
+  if (error) { body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+  const nights = Math.round((new Date(b.check_out_date) - new Date(b.check_in_date)) / 86400000);
+  const row = (k, v) => v ? `<div class="row"><span class="k">${k}</span><span>${v}</span></div>` : '';
+  const dogBlocks = b.booking_dogs.map(x => {
+    const d = x.dogs; if (!d) return '';
+    const o = d.owners || {};
+    return `<div class="dogblk">
+      <div class="name" style="font-weight:600">${d.size ? '(' + d.size + ') ' : ''}${esc(d.name)}
+        <span style="font-weight:400;color:var(--muted)">· ${esc(d.breed || '')}${d.suburb ? ' · ' + esc(d.suburb) : ''}</span></div>
+      ${row('Owner', esc(o.name || '') + (o.phone ? ` · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : ''))}
+      ${(d.red_flags || []).length ? `<div class="chips">${d.red_flags.map(f => `<span class="chip">${esc(f)}</span>`).join('')}</div>` : ''}
+      ${row('Meals', esc(d.meals))}
+      ${row('Farm friends', esc(d.farm_friends))}
+      ${row('Dog notes', esc(d.notes))}
+    </div>`;
+  }).join('');
+  body.innerHTML = `
+    <h3>${esc(b.title)}</h3>
+    <span class="status s-${b.status.replace(/\s/g,'')}">${b.status}</span>
+    ${row('Stay', `${fmtD(b.check_in_date)} → ${fmtD(b.check_out_date)} · ${nights} night${nights === 1 ? '' : 's'}`)}
+    ${row('Transport', esc(b.transport_to ? b.transport_to : (b.transport_needed ? 'Needed' : 'Owner drop-off/pickup')))}
+    ${row('Pickup', esc(b.pickup_timing))}
+    ${row('Return', esc(b.return_timing))}
+    ${row('Balance 24h', b.balance_24h_prior > 0 ? '$' + b.balance_24h_prior : null)}
+    ${row('Payment', esc(b.calendar_colour))}
+    ${(b.important || []).length ? `<div class="chips">${b.important.map(i => `<span class="chip warn">${esc(i)}</span>`).join('')}</div>` : ''}
+    ${row('Notes', esc(b.notes))}
+    ${row('Breakdown', esc(b.stay_breakdown))}
+    ${dogBlocks}`;
+}
+function closeBooking() { document.getElementById('modalWrap').hidden = true; }
+document.getElementById('monthGrid').addEventListener('click', e => {
+  const bar = e.target.closest('.mv-bar');
+  if (bar) openBooking(bar.dataset.b);
+});
+document.getElementById('modalWrap').addEventListener('click', e => {
+  if (e.target.id === 'modalWrap') closeBooking();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBooking(); });
+
+// ---- auth & shell ----
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.dataset.tab; if (!t) return;
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== 'tab-' + t);
+});
+async function signIn() {
+  const { error } = await db.auth.signInWithPassword({
+    email: document.getElementById('email').value.trim(),
+    password: document.getElementById('pass').value });
+  document.getElementById('loginErr').textContent = error ? error.message : '';
+}
+async function signOut() { await db.auth.signOut(); }
+db.auth.onAuthStateChange((_e, session) => {
+  document.getElementById('login').hidden = !!session;
+  document.getElementById('app').hidden = !session;
+  if (session) loadAll();
+});
+document.getElementById('pass').addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
+</script>
+</body>
+</html>
