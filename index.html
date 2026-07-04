@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Paperbark Farm — Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="./supabase.js"></script>
 <style>
   :root {
     --bg: #f7f5f0; --card: #ffffff; --ink: #2d2a24; --muted: #8a8478;
@@ -80,6 +80,7 @@
             border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             cursor: pointer; }
   .mv-bar:hover { filter: brightness(1.15); }
+  #modalWrap[hidden] { display: none; }
   #modalWrap { position: fixed; inset: 0; background: rgba(45,42,36,.45); display: flex;
                align-items: flex-start; justify-content: center; padding: 8vh 16px; z-index: 50; }
   #modal { background: var(--card); border-radius: 14px; padding: 20px; width: 100%;
@@ -104,7 +105,7 @@
 </head>
 <body>
 
-<div id="login" hidden>
+<div id="login">
   <div class="card">
     <h2>Paperbark Farm</h2>
     <div class="sub">Staff dashboard — sign in</div>
@@ -161,6 +162,11 @@
 </div>
 
 <script>
+if (typeof supabase === 'undefined') {
+  document.getElementById('loginErr').textContent =
+    'App failed to load — check your connection and pull down to refresh.';
+  throw new Error('supabase-js failed to load');
+}
 const SUPABASE_URL = 'https://ekcbynduceipgcqvtpyf.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_OY_XL1pBcCg9mGbFX0qJxg_KwIWBkPj';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
